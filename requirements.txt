@@ -1,0 +1,7 @@
+flask
+pandas
+geopandas
+shapely
+numpy
+gunicorn
+xarray

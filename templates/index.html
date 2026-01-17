@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TNSDMA Flood Intelligence</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+
+    <style>
+        /* LOADING OVERLAY */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.95); z-index: 9999;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .spinner {
+            width: 50px; height: 50px; border: 5px solid #334155;
+            border-top: 5px solid #38bdf8; border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* MAP LEGEND */
+        .legend {
+            background: rgba(30, 41, 59, 0.9);
+            color: #cbd5e1;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            font-size: 12px;
+            line-height: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .legend i {
+            width: 12px; height: 12px; float: left;
+            margin-right: 8px; margin-top: 4px; border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="loading-overlay">
+    <div class="spinner"></div>
+    <h3 style="color: #f1f5f9; margin-top: 20px; font-family: sans-serif; letter-spacing: 1px;">SIMULATING DISASTER PHYSICS...</h3>
+</div>
+
+<div class="app-container">
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="logo-icon"><i class="fa-solid fa-cloud-bolt"></i></div>
+            <div><h2>TN Flood AI</h2><span class="badge">PRO 6.0</span></div>
+        </div>
+
+        <div class="nav-menu">
+            <form method="POST" onsubmit="document.getElementById('loading-overlay').style.display='flex'">
+                <button type="submit" name="mode" value="live" class="nav-item {{ 'active' if active_mode=='live' else '' }}">
+                    <i class="fa-solid fa-tower-broadcast"></i> Live
+                </button>
+                <button type="submit" name="mode" value="forecast" class="nav-item {{ 'active' if active_mode=='forecast' else '' }}">
+                    <i class="fa-solid fa-chart-line"></i> Forecast
+                </button>
+                <button type="submit" name="mode" value="historical" class="nav-item {{ 'active' if active_mode=='historical' else '' }}">
+                    <i class="fa-solid fa-clock-rotate-left"></i> History
+                </button>
+            </form>
+        </div>
+
+        <div class="controls-area">
+            <form method="POST" id="mainForm" onsubmit="document.getElementById('loading-overlay').style.display='flex'">
+                <input type="hidden" name="mode" value="{{ active_mode }}">
+                
+                {% if active_mode == 'historical' %}
+                <div class="control-group">
+                    <label>Select Event</label>
+                    <div class="select-wrapper">
+                        <select name="cyclone" onchange="document.getElementById('loading-overlay').style.display='flex'; this.form.submit()">
+                            {% for c in cyclones %}
+                            <option value="{{c}}" {% if c == selected_cyclone %}selected{% endif %}>{{c}}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Drainage Failure: <span id="blockVal">0</span>%</label>
+                    <input type="range" name="blockage" min="0" max="90" value="0" oninput="document.getElementById('blockVal').innerText=this.value" onchange="document.getElementById('loading-overlay').style.display='flex'; this.form.submit()">
+                </div>
+
+                <div class="control-group highlight-box">
+                    <label><i class="fa-solid fa-clock"></i> Timeline</label>
+                    <div class="time-display" id="dateDisplay">Loading...</div>
+                    <input type="range" id="timeSlider" min="0" max="10" value="0" step="1" disabled>
+                    <div class="playback-controls">
+                        <button type="button" id="playBtn" onclick="togglePlay()"><i class="fa-solid fa-play"></i></button>
+                    </div>
+                </div>
+                {% endif %}
+            </form>
+
+            {% if result %}
+            <div class="analytics-card">
+                <h3 id="districtLabel">METEOROLOGY</h3>
+                <div class="met-grid">
+                    <div class="met-item"><i class="fa-solid fa-wind"></i> <span id="windVal">{{result.wind_speed}} km/h</span></div>
+                    <div class="met-item"><i class="fa-solid fa-cloud-rain"></i> <span id="rainVal">{{result.total_rain}} mm</span></div>
+                </div>
+                <div class="kpi-grid">
+                    <div class="kpi"><span>Risk</span><b id="riskVal" class="status-{{result.risk}}">{{result.risk}}</b></div>
+                    <div class="kpi"><span>Depth</span><b id="depthVal">{{result.peak_accumulation}} mm</b></div>
+                </div>
+                <div class="mini-chart"><canvas id="miniChart"></canvas></div>
+            </div>
+            {% endif %}
+        </div>
+    </aside>
+
+    <main class="map-view" id="map"></main>
+</div>
+
+<script>
+    // --- 1. SETUP MAP LAYERS ---
+    var darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: 'CARTO' });
+    var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri' });
+
+    var map = L.map('map', {
+        center: [10.8, 78.7],
+        zoom: 7,
+        layers: [darkLayer]
+    });
+
+    var baseMaps = { "Dark Mode": darkLayer, "Satellite": satLayer };
+    
+    var riskLayerGroup = L.layerGroup().addTo(map);
+    var heatmapLayerGroup = L.layerGroup(); 
+    var trackLayerGroup = L.layerGroup().addTo(map);
+
+    var overlayMaps = {
+        "Risk Zones": riskLayerGroup,
+        "Flood Heatmap": heatmapLayerGroup,
+        "Cyclone Track": trackLayerGroup
+    };
+
+    L.control.layers(baseMaps, overlayMaps, {position: 'topright'}).addTo(map);
+
+    // --- MAP LEGEND [NEW] ---
+    var legend = L.control({position: 'bottomright'});
+    legend.onAdd = function (map) {
+        var div = L.DomUtil.create('div', 'info legend');
+        div.innerHTML += "<strong>Flood Risk</strong><br>";
+        div.innerHTML += '<i style="background:#ef4444"></i> High (>100mm)<br>';
+        div.innerHTML += '<i style="background:#f97316"></i> Moderate (>50mm)<br>';
+        div.innerHTML += '<i style="background:#facc15"></i> Low (>20mm)<br>';
+        div.innerHTML += '<i style="background:#10b981"></i> Safe<br>';
+        return div;
+    };
+    legend.addTo(map);
+
+    // --- 2. LOAD DATA ---
+    var mapGeo = {{ frontend_data.map_geo | tojson }};
+    var simData = {{ frontend_data.simulation | tojson }};
+    var heatData = {{ frontend_data.heatmap | tojson }};
+    var dates = {{ frontend_data.dates | tojson }};
+    var trackPath = {{ track_path | tojson }};
+
+    // --- 3. RENDER RISK ZONES ---
+    var geoLayer = L.geoJson(mapGeo, {
+        style: function(feature) {
+            return { color: "white", weight: 1, fillColor: "#10b981", fillOpacity: 0.6 };
+        },
+        onEachFeature: function(feature, layer) {
+            layer.on('click', function() {
+                var dName = feature.properties.NAME_2;
+                document.getElementById('districtLabel').innerText = dName.toUpperCase();
+                // Future: Update charts here
+            });
+        }
+    }).addTo(riskLayerGroup);
+
+    // --- 4. RENDER CYCLONE TRACK ---
+    if (trackPath.length > 0) {
+        L.polyline(trackPath, {color: '#22d3ee', weight: 3, dashArray: '10, 5'}).addTo(trackLayerGroup);
+        
+        var startIcon = L.divIcon({className: 'custom-icon start-icon', html: '<i class="fa-solid fa-play"></i>'});
+        var endIcon = L.divIcon({className: 'custom-icon end-icon', html: '<i class="fa-solid fa-stop"></i>'});
+
+        L.marker(trackPath[0], {icon: startIcon}).bindTooltip("Origin").addTo(trackLayerGroup);
+        L.marker(trackPath[trackPath.length-1], {icon: endIcon}).bindTooltip("Landfall").addTo(trackLayerGroup);
+    }
+
+    // --- 5. SLIDER LOGIC ---
+    var slider = document.getElementById('timeSlider');
+    var dateDisplay = document.getElementById('dateDisplay');
+    var heatLayer = null;
+
+    if (dates.length > 0) {
+        slider.max = dates.length - 1;
+        slider.disabled = false;
+        slider.value = 0;
+        updateMap(0);
+    }
+
+    function updateMap(index) {
+        var currentDate = dates[index];
+        dateDisplay.innerText = currentDate;
+
+        // A. Update Polygons
+        geoLayer.eachLayer(function(layer) {
+            var dName = layer.feature.properties.NAME_2;
+            var dData = simData[dName];
+            
+            if (dData && dData[index]) {
+                var stats = dData[index];
+                var className = stats.risk === "HIGH" ? "pulse-red" : "";
+                
+                layer.setStyle({ 
+                    fillColor: stats.color,
+                    className: className
+                });
+                
+                // Matches V10 Engine Keys (Capitalized)
+                layer.bindPopup(
+                    `<b>${dName}</b><br>` +
+                    `Risk: <b style="color:${stats.color}">${stats.risk}</b><br>` +
+                    `Flood Depth: <b>${stats.accum} mm</b><br>` + // Fallback to 'Accumulation' if needed
+                    `<hr style="margin:5px 0; border:0; border-top:1px solid #334155">` +
+                    `Daily Rain: ${stats.Daily_Rain} mm<br>` +
+                    `Total Rain: <b style="color:#38bdf8">${stats.Total_Rain} mm</b><br>` +
+                    `<span style="font-size:9px; color:#64748b">` +
+                    `Dist: ${stats.Debug_Dist}km | W: ${stats.Debug_W}` +
+                    `</span>`
+                );
+            }
+        });
+
+        // B. Update Heatmap
+        if (heatLayer) heatmapLayerGroup.removeLayer(heatLayer);
+        if (heatData && heatData[index]) {
+            heatLayer = L.heatLayer(heatData[index], {
+                radius: 40, blur: 25, maxZoom: 8, max: 1.0,
+                gradient: {0.4: 'yellow', 0.65: 'orange', 1: 'red'}
+            }).addTo(heatmapLayerGroup);
+        }
+    }
+
+    slider.addEventListener('input', function() { updateMap(this.value); });
+
+    var isPlaying = false; var playInterval;
+    function togglePlay() {
+        if (isPlaying) {
+            clearInterval(playInterval);
+            document.getElementById('playBtn').innerHTML = '<i class="fa-solid fa-play"></i>';
+        } else {
+            playInterval = setInterval(function() {
+                var val = parseInt(slider.value);
+                if (val < dates.length - 1) { slider.value = val + 1; updateMap(val + 1); }
+                else { slider.value = 0; updateMap(0); }
+            }, 800);
+            document.getElementById('playBtn').innerHTML = '<i class="fa-solid fa-pause"></i>';
+        }
+        isPlaying = !isPlaying;
+    }
+
+    // --- CHART ---
+    {% if result %}
+    const ctx = document.getElementById('miniChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: {{ result.chart_labels | tojson }},
+            datasets: [{
+                label: 'Rain', data: {{ result.chart_rain | tojson }},
+                backgroundColor: '#38bdf8', order:2
+            }, {
+                label: 'Flood', data: {{ result.chart_water | tojson }},
+                type: 'line', borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.2)', fill:true, order:1
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: {x:{display:false},y:{display:false}}, plugins:{legend:{display:false}} }
+    });
+    {% endif %}
+</script>
+</body>
+</html>
