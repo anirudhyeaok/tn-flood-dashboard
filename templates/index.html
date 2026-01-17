@@ -223,15 +223,18 @@
                 });
                 
                 // Matches V10 Engine Keys (Capitalized)
+                // Update Popup with ROBUST DATA CHECKING
                 layer.bindPopup(
                     `<b>${dName}</b><br>` +
                     `Risk: <b style="color:${stats.color}">${stats.risk}</b><br>` +
-                    `Flood Depth: <b>${stats.accum} mm</b><br>` + // Fallback to 'Accumulation' if needed
+                    // FIX: Use 'Accumulation', not 'accum'
+                    `Flood Depth: <b>${stats.Accumulation || stats.depth || 0} mm</b><br>` + 
                     `<hr style="margin:5px 0; border:0; border-top:1px solid #334155">` +
-                    `Daily Rain: ${stats.Daily_Rain} mm<br>` +
-                    `Total Rain: <b style="color:#38bdf8">${stats.Total_Rain} mm</b><br>` +
+                    // FIX: Check for both Capitalized and Lowercase keys
+                    `Daily Rain: ${stats.Daily_Rain || stats.daily_rain || stats.rain || 0} mm<br>` +
+                    `Total Rain: <b style="color:#38bdf8">${stats.Total_Rain || stats.total_rain || 0} mm</b><br>` +
                     `<span style="font-size:9px; color:#64748b">` +
-                    `Dist: ${stats.Debug_Dist}km | W: ${stats.Debug_W}` +
+                    `Dist: ${stats.Debug_Dist || stats.debug_dist || '?'}km | W: ${stats.Debug_W || stats.debug_w || '?'}` +
                     `</span>`
                 );
             }
