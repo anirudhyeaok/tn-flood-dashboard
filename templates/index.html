@@ -7,90 +7,159 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link  rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
 
     <style>
-        /* LOADING OVERLAY */
+        /* ── Loading overlay ─────────────────────────────────────────────── */
         #loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(15, 23, 42, 0.95); z-index: 9999;
             display: none; flex-direction: column; align-items: center; justify-content: center;
         }
-        .spinner {
-            width: 50px; height: 50px; border: 5px solid #334155;
-            border-top: 5px solid #38bdf8; border-radius: 50%;
-            animation: spin 1s linear infinite;
+        .spinner { width: 50px; height: 50px; border: 5px solid #334155; border-top: 5px solid #38bdf8; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Cyclone banner ──────────────────────────────────────────────── */
+        #cyclone-banner {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 8000;
+            padding: 10px 20px; text-align: center; font-weight: bold; font-size: 13px;
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            animation: pulse-banner 2s infinite;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        /* MAP LEGEND */
-        .legend {
-            background: rgba(30, 41, 59, 0.9);
-            color: #cbd5e1;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #334155;
-            font-size: 12px;
-            line-height: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        @keyframes pulse-banner { 0%,100%{opacity:1} 50%{opacity:0.8} }
+        #cyclone-banner .banner-close { cursor:pointer; opacity:0.7; margin-left:auto; }
+        #cyclone-banner .banner-close:hover { opacity:1; }
+
+        /* ── Alert feed ──────────────────────────────────────────────────── */
+        .alert-feed { display: flex; flex-direction: column; gap: 6px; }
+        .alert-item {
+            border-radius: 8px; padding: 10px 12px;
+            border-left: 3px solid;
+            font-size: 12px; line-height: 1.5;
         }
-        .legend i {
-            width: 12px; height: 12px; float: left;
-            margin-right: 8px; margin-top: 4px; border-radius: 2px;
+        .alert-item.RED    { background: rgba(239,68,68,0.1);  border-color: #ef4444; }
+        .alert-item.ORANGE { background: rgba(249,115,22,0.1); border-color: #f97316; }
+        .alert-item.YELLOW { background: rgba(250,204,21,0.1); border-color: #facc15; }
+        .alert-district { font-weight: bold; color: #f1f5f9; }
+        .alert-level    { font-size: 10px; letter-spacing: 0.5px; opacity: 0.85; }
+        .alert-action   { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+        /* ── Data attribution panel ──────────────────────────────────────── */
+        .attribution-panel {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid #334155; border-radius: 8px;
+            padding: 10px 12px; font-size: 11px; color: #64748b;
+            line-height: 1.6;
+        }
+        .attribution-panel .attr-source { color: #38bdf8; font-weight: 600; }
+        .attribution-panel .attr-time   { color: #94a3b8; }
+        .live-dot {
+            display: inline-block; width: 8px; height: 8px;
+            border-radius: 50%; background: #22c55e; margin-right: 5px;
+            animation: live-pulse 1.5s infinite;
+        }
+        @keyframes live-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.4)} 50%{box-shadow:0 0 0 5px rgba(34,197,94,0)} }
+        .forecast-dot {
+            display: inline-block; width: 8px; height: 8px;
+            border-radius: 50%; background: #f59e0b; margin-right: 5px;
+        }
+
+        /* ── Confidence badge ────────────────────────────────────────────── */
+        .confidence-strip { display: flex; gap: 4px; margin: 8px 0; }
+        .conf-badge {
+            flex: 1; text-align: center; padding: 4px 0;
+            border-radius: 4px; font-size: 10px; font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+
+        /* ── Map legend ──────────────────────────────────────────────────── */
+        .legend { background: rgba(30,41,59,0.9); color:#cbd5e1; padding:12px; border-radius:8px; border:1px solid #334155; font-size:12px; line-height:22px; }
+        .legend i { width:12px; height:12px; float:left; margin-right:8px; margin-top:5px; border-radius:2px; }
+
+        /* ── No-alerts placeholder ───────────────────────────────────────── */
+        .no-alerts { color: #22c55e; font-size: 12px; text-align: center; padding: 10px; }
+
+        /* ── Forecast day selector ───────────────────────────────────────── */
+        .day-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+        .day-tab { flex:1; background:#334155; border:none; color:#94a3b8; padding:6px; border-radius:6px; cursor:pointer; font-size:11px; transition:0.2s; }
+        .day-tab.active { background:#3b82f6; color:white; }
+
+        .select-wrapper select {
+            width: 100%; padding: 8px 10px; background: #334155; border: 1px solid #475569;
+            color: #f1f5f9; border-radius: 8px; font-size: 13px; cursor: pointer;
         }
     </style>
 </head>
 <body>
 
+<!-- ── Loading overlay ──────────────────────────────────────────────────────── -->
 <div id="loading-overlay">
     <div class="spinner"></div>
-    <h3 style="color: #f1f5f9; margin-top: 20px; font-family: sans-serif; letter-spacing: 1px;">SIMULATING DISASTER PHYSICS...</h3>
+    <h3 style="color:#f1f5f9; margin-top:20px; font-family:sans-serif; letter-spacing:1px;">SIMULATING DISASTER PHYSICS...</h3>
 </div>
 
-<div class="app-container">
+<!-- ── Cyclone banner ───────────────────────────────────────────────────────── -->
+{% if cyclone_banner %}
+<div id="cyclone-banner" style="background:{{ cyclone_banner.bg }}; color:{{ cyclone_banner.color }};">
+    <i class="fa-solid fa-hurricane fa-spin-pulse"></i>
+    <strong>{{ cyclone_banner.text }}</strong> — 
+    {{ cyclone_banner.system_type }} detected over {{ cyclone_banner.affected_count }} district(s). 
+    Max winds: {{ cyclone_banner.max_wind_kmh }} km/h near {{ cyclone_banner.max_district }}.
+    <small style="opacity:0.7"> | Source: {{ cyclone_banner.source }}</small>
+    <span class="banner-close" onclick="document.getElementById('cyclone-banner').style.display='none'">✕</span>
+</div>
+{% endif %}
+
+<div class="app-container" {% if cyclone_banner %}style="padding-top:42px"{% endif %}>
+
+    <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
     <aside class="sidebar">
         <div class="brand">
             <div class="logo-icon"><i class="fa-solid fa-cloud-bolt"></i></div>
-            <div><h2>TN Flood AI</h2><span class="badge">PRO 6.0</span></div>
+            <div><h2>TN Flood AI</h2><span class="badge">PRO 7.0</span></div>
         </div>
 
+        <!-- Mode switcher -->
         <div class="nav-menu">
             <form method="POST" onsubmit="document.getElementById('loading-overlay').style.display='flex'">
-                <button type="submit" name="mode" value="live" class="nav-item {{ 'active' if active_mode=='live' else '' }}">
+                <button type="submit" name="mode" value="live"
+                    class="nav-item {{ 'active' if active_mode=='live' else '' }}">
                     <i class="fa-solid fa-tower-broadcast"></i> Live
                 </button>
-                <button type="submit" name="mode" value="forecast" class="nav-item {{ 'active' if active_mode=='forecast' else '' }}">
+                <button type="submit" name="mode" value="forecast"
+                    class="nav-item {{ 'active' if active_mode=='forecast' else '' }}">
                     <i class="fa-solid fa-chart-line"></i> Forecast
                 </button>
-                <button type="submit" name="mode" value="historical" class="nav-item {{ 'active' if active_mode=='historical' else '' }}">
+                <button type="submit" name="mode" value="historical"
+                    class="nav-item {{ 'active' if active_mode=='historical' else '' }}">
                     <i class="fa-solid fa-clock-rotate-left"></i> History
                 </button>
             </form>
         </div>
 
+        <!-- Controls (historical only) -->
+        {% if active_mode == 'historical' %}
         <div class="controls-area">
             <form method="POST" id="mainForm" onsubmit="document.getElementById('loading-overlay').style.display='flex'">
-                <input type="hidden" name="mode" value="{{ active_mode }}">
-                
-                {% if active_mode == 'historical' %}
+                <input type="hidden" name="mode" value="historical">
                 <div class="control-group">
                     <label>Select Event</label>
                     <div class="select-wrapper">
                         <select name="cyclone" onchange="document.getElementById('loading-overlay').style.display='flex'; this.form.submit()">
                             {% for c in cyclones %}
-                            <option value="{{c}}" {% if c == selected_cyclone %}selected{% endif %}>{{c}}</option>
+                            <option value="{{ c }}" {% if c==selected_cyclone %}selected{% endif %}>{{ c }}</option>
                             {% endfor %}
                         </select>
                     </div>
                 </div>
-                
                 <div class="control-group">
-                    <label>Drainage Failure: <span id="blockVal">0</span>%</label>
-                    <input type="range" name="blockage" min="0" max="90" value="0" oninput="document.getElementById('blockVal').innerText=this.value" onchange="document.getElementById('loading-overlay').style.display='flex'; this.form.submit()">
+                    <label>Drainage Failure: <span id="blockVal">{{ blockage }}</span>%</label>
+                    <input type="range" name="blockage" min="0" max="90" value="{{ blockage }}"
+                        oninput="document.getElementById('blockVal').innerText=this.value"
+                        onchange="document.getElementById('loading-overlay').style.display='flex'; this.form.submit()">
                 </div>
-
                 <div class="control-group highlight-box">
                     <label><i class="fa-solid fa-clock"></i> Timeline</label>
                     <div class="time-display" id="dateDisplay">Loading...</div>
@@ -99,193 +168,582 @@
                         <button type="button" id="playBtn" onclick="togglePlay()"><i class="fa-solid fa-play"></i></button>
                     </div>
                 </div>
-                {% endif %}
             </form>
+        </div>
+        {% endif %}
 
-            {% if result %}
-            <div class="analytics-card">
-                <h3 id="districtLabel">METEOROLOGY</h3>
-                <div class="met-grid">
-                    <div class="met-item"><i class="fa-solid fa-wind"></i> <span id="windVal">{{result.wind_speed}} km/h</span></div>
-                    <div class="met-item"><i class="fa-solid fa-cloud-rain"></i> <span id="rainVal">{{result.total_rain}} mm</span></div>
-                </div>
-                <div class="kpi-grid">
-                    <div class="kpi"><span>Risk</span><b id="riskVal" class="status-{{result.risk}}">{{result.risk}}</b></div>
-                    <div class="kpi"><span>Depth</span><b id="depthVal">{{result.peak_accumulation}} mm</b></div>
-                </div>
-                <div class="mini-chart"><canvas id="miniChart"></canvas></div>
+        <!-- Forecast day tabs (forecast mode only) -->
+        {% if active_mode == 'forecast' %}
+        <div class="control-group">
+            <h3>FORECAST DAY</h3>
+            <div class="day-tabs">
+                <button class="day-tab active" onclick="switchForecastDay(0, this)">Day 1</button>
+                <button class="day-tab"        onclick="switchForecastDay(1, this)">Day 2</button>
+                <button class="day-tab"        onclick="switchForecastDay(2, this)">Day 3</button>
+            </div>
+            {% if confidence_note %}
+            <div class="attribution-panel" style="margin-top:0">
+                <i class="fa-solid fa-circle-info" style="color:#38bdf8"></i>
+                {{ confidence_note }}
             </div>
             {% endif %}
         </div>
+        {% endif %}
+
+        <!-- Analytics card -->
+        {% if result %}
+        <div class="analytics-card">
+            <h3 id="districtLabel">
+                {% if active_mode == 'live' %}
+                    <span class="live-dot"></span>LIVE — CHENNAI
+                {% elif active_mode == 'forecast' %}
+                    <span class="forecast-dot"></span>FORECAST — CHENNAI
+                {% else %}
+                    METEOROLOGY — CHENNAI
+                {% endif %}
+            </h3>
+
+            <!-- Confidence strip — updated dynamically by JS on district click -->
+            {% if active_mode == 'forecast' %}
+            <div class="confidence-strip" id="confStrip">
+                {% if result.confidence_labels is defined %}
+                {% for i in range(result.confidence_labels|length) %}
+                <div class="conf-badge" style="background:{{ result.conf_colors[i] }}20; color:{{ result.conf_colors[i] }}; border:1px solid {{ result.conf_colors[i] }}40">
+                    D{{ i+1 }} {{ result.confidence_labels[i] }}
+                </div>
+                {% endfor %}
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="met-grid">
+                <div class="met-item"><i class="fa-solid fa-wind"></i> <span id="windVal">{{ result.wind_speed }} km/h</span></div>
+                <div class="met-item"><i class="fa-solid fa-cloud-rain"></i> <span id="rainVal">{{ result.total_rain }} mm</span></div>
+            </div>
+            <div class="kpi-grid">
+                <div class="kpi"><span>Risk</span><b id="riskVal" class="status-{{ result.risk }}">{{ result.risk }}</b></div>
+                <div class="kpi"><span>Depth</span><b id="depthVal">{{ result.peak_accumulation }} mm</b></div>
+            </div>
+            <div class="mini-chart"><canvas id="miniChart"></canvas></div>
+        </div>
+        {% endif %}
+
+        <!-- Alert feed -->
+        <h3>
+            {% if active_mode == 'live' %}
+                <i class="fa-solid fa-bell" style="color:#f97316"></i> LIVE ALERTS
+            {% elif active_mode == 'forecast' %}
+                <i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b"></i> FORECAST WARNINGS
+            {% else %}
+                <i class="fa-solid fa-clock-rotate-left"></i> EVENT SUMMARY
+            {% endif %}
+        </h3>
+        <div class="alert-feed">
+            {% if alerts %}
+                {% for alert in alerts[:5] %}
+                <div class="alert-item {{ 'RED' if 'RED' in alert.level else ('ORANGE' if 'ORANGE' in alert.level else 'YELLOW') }}">
+                    <div class="alert-district">{{ alert.icon }} {{ alert.district }}</div>
+                    <div class="alert-level">{{ alert.level }}</div>
+                    <div class="alert-action">{{ alert.action }}</div>
+                    <div style="font-size:10px; color:#64748b; margin-top:3px">
+                        Rain: {{ alert.rain_mm }}mm | Wind: {{ alert.wind_kmh }} km/h
+                    </div>
+                </div>
+                {% endfor %}
+                {% if alerts|length > 5 %}
+                <div style="font-size:11px; color:#64748b; text-align:center">
+                    + {{ alerts|length - 5 }} more districts affected
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="no-alerts">
+                    <i class="fa-solid fa-check-circle"></i> No active alerts
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Data attribution -->
+        {% if data_meta %}
+        <div class="attribution-panel" style="margin-top:12px">
+            {% if active_mode == 'live' %}
+                <span class="live-dot"></span>
+            {% elif active_mode == 'forecast' %}
+                <span class="forecast-dot"></span>
+            {% endif %}
+            <span class="attr-source">{{ data_meta.source }}</span><br>
+            <span class="attr-time">{{ data_meta.fetched_at }}</span><br>
+            {% if data_meta.note %}
+            <span style="font-size:10px; color:#475569">{{ data_meta.note }}</span>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="footer">TNSDMA Flood Intelligence System v7.0<br>
+            <span style="color:#334155">For emergency use — verify with IMD/NDMA</span>
+        </div>
     </aside>
 
+    <!-- ── Map ──────────────────────────────────────────────────────────────── -->
     <main class="map-view" id="map"></main>
 </div>
 
+<!-- ─────────────────────────── JavaScript ─────────────────────────────────── -->
 <script>
-    // --- 1. SETUP MAP LAYERS ---
-    var darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: 'CARTO' });
-    var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri' });
+// ── 1. Map setup ──────────────────────────────────────────────────────────────
+var darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {attribution:'CARTO'});
+var satLayer  = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {attribution:'Esri'});
 
-    var map = L.map('map', {
-        center: [10.8, 78.7],
-        zoom: 7,
-        layers: [darkLayer]
-    });
+var map = L.map('map', { center: [10.8, 78.7], zoom: 7, layers: [darkLayer] });
 
-    var baseMaps = { "Dark Mode": darkLayer, "Satellite": satLayer };
-    
-    var riskLayerGroup = L.layerGroup().addTo(map);
-    var heatmapLayerGroup = L.layerGroup(); 
-    var trackLayerGroup = L.layerGroup().addTo(map);
+var riskLayerGroup  = L.layerGroup().addTo(map);
+var heatmapLayerGroup = L.layerGroup();
+var trackLayerGroup = L.layerGroup().addTo(map);
 
-    var overlayMaps = {
-        "Risk Zones": riskLayerGroup,
-        "Flood Heatmap": heatmapLayerGroup,
-        "Cyclone Track": trackLayerGroup
-    };
+L.control.layers(
+    {"Dark Mode": darkLayer, "Satellite": satLayer},
+    {"Risk Zones": riskLayerGroup, "Flood Heatmap": heatmapLayerGroup, "Cyclone Track": trackLayerGroup},
+    {position: 'topright'}
+).addTo(map);
 
-    L.control.layers(baseMaps, overlayMaps, {position: 'topright'}).addTo(map);
+// Legend
+var legend = L.control({position:'bottomright'});
+legend.onAdd = function() {
+    var div = L.DomUtil.create('div', 'info legend');
+    div.innerHTML = "<strong>Flood Risk</strong><br>"
+        + '<i style="background:#ef4444"></i> High<br>'
+        + '<i style="background:#f97316"></i> Moderate<br>'
+        + '<i style="background:#facc15"></i> Low<br>'
+        + '<i style="background:#10b981"></i> Safe<br>';
+    return div;
+};
+legend.addTo(map);
 
-    // --- MAP LEGEND [NEW] ---
-    var legend = L.control({position: 'bottomright'});
-    legend.onAdd = function (map) {
-        var div = L.DomUtil.create('div', 'info legend');
-        div.innerHTML += "<strong>Flood Risk</strong><br>";
-        div.innerHTML += '<i style="background:#ef4444"></i> High (>100mm)<br>';
-        div.innerHTML += '<i style="background:#f97316"></i> Moderate (>50mm)<br>';
-        div.innerHTML += '<i style="background:#facc15"></i> Low (>20mm)<br>';
-        div.innerHTML += '<i style="background:#10b981"></i> Safe<br>';
-        return div;
-    };
-    legend.addTo(map);
+// ── 2. Data from Jinja ────────────────────────────────────────────────────────
+var mapGeo    = {{ frontend_data.map_geo | tojson }};
+var simData   = {{ frontend_data.simulation | tojson }};
+var heatData  = {{ frontend_data.heatmap | tojson }};
+var dates     = {{ frontend_data.dates | tojson }};
+var trackPath     = {{ track_path | tojson }};
+var activeMode    = "{{ active_mode }}";
 
-    // --- 2. LOAD DATA ---
-    var mapGeo = {{ frontend_data.map_geo | tojson }};
-    var simData = {{ frontend_data.simulation | tojson }};
-    var heatData = {{ frontend_data.heatmap | tojson }};
-    var dates = {{ frontend_data.dates | tojson }};
-    var trackPath = {{ track_path | tojson }};
+// Live/forecast cyclone track (from cyclone_tracker scan)
+{% if cyclone_banner and cyclone_banner.affected_count > 0 %}
+var liveCycloneTrack = {{ frontend_data.simulation | tojson | safe }};
+// Use the approximate_track from cyclone scan if available
+{% endif %}
+var liveTrackPath = {{ (cyclone_banner.approximate_track if cyclone_banner and cyclone_banner.get('approximate_track') else []) | tojson }};
 
-    // --- 3. RENDER RISK ZONES ---
-    var geoLayer = L.geoJson(mapGeo, {
-        style: function(feature) {
-            return { color: "white", weight: 1, fillColor: "#10b981", fillOpacity: 0.6 };
-        },
-        onEachFeature: function(feature, layer) {
-            layer.on('click', function() {
-                var dName = feature.properties.NAME_2;
-                document.getElementById('districtLabel').innerText = dName.toUpperCase();
-                // Future: Update charts here
-            });
+// ── 3. GeoJSON layer ──────────────────────────────────────────────────────────
+var selectedDistrict = "Chennai";
+
+var geoLayer = L.geoJson(mapGeo, {
+    style: function() { return {color:"white", weight:1, fillColor:"#10b981", fillOpacity:0.6}; },
+    onEachFeature: function(feature, layer) {
+        layer.on('click', function() {
+            selectedDistrict = feature.properties.NAME_2;
+            updateSidebarForDistrict(selectedDistrict);
+        });
+    }
+}).addTo(riskLayerGroup);
+
+// ── 4. Cyclone track — IMD-style animated markers ────────────────────────────
+var cycloneMarker = null;  // the moving storm icon
+var trackMarkers  = [];    // the static waypoint dots
+
+// CSS for cyclone icon injected once
+(function() {
+    var s = document.createElement('style');
+    s.textContent = `
+        .cyclone-icon {
+            width: 36px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+            filter: drop-shadow(0 0 6px #22d3ee) drop-shadow(0 0 12px #0ea5e9);
+            animation: spin-slow 3s linear infinite;
         }
-    }).addTo(riskLayerGroup);
+        @keyframes spin-slow { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 
-    // --- 4. RENDER CYCLONE TRACK ---
-    if (trackPath.length > 0) {
-        L.polyline(trackPath, {color: '#22d3ee', weight: 3, dashArray: '10, 5'}).addTo(trackLayerGroup);
-        
-        var startIcon = L.divIcon({className: 'custom-icon start-icon', html: '<i class="fa-solid fa-play"></i>'});
-        var endIcon = L.divIcon({className: 'custom-icon end-icon', html: '<i class="fa-solid fa-stop"></i>'});
+        .track-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 6px rgba(34,211,238,0.6);
+        }
+        .track-dot.landfall {
+            width: 14px; height: 14px;
+            background: #ef4444 !important;
+            box-shadow: 0 0 10px rgba(239,68,68,0.8);
+        }
+    `;
+    document.head.appendChild(s);
+})();
 
-        L.marker(trackPath[0], {icon: startIcon}).bindTooltip("Origin").addTo(trackLayerGroup);
-        L.marker(trackPath[trackPath.length-1], {icon: endIcon}).bindTooltip("Landfall").addTo(trackLayerGroup);
-    }
+function buildCycloneTrack(track) {
+    if (!track || track.length === 0) return;
 
-    // --- 5. SLIDER LOGIC ---
-    var slider = document.getElementById('timeSlider');
-    var dateDisplay = document.getElementById('dateDisplay');
-    var heatLayer = null;
+    // Draw the dashed path line
+    L.polyline(track, {
+        color: '#22d3ee', weight: 2.5,
+        dashArray: '8, 5', opacity: 0.7
+    }).addTo(trackLayerGroup);
 
-    if (dates.length > 0) {
-        slider.max = dates.length - 1;
-        slider.disabled = false;
-        slider.value = 0;
-        updateMap(0);
-    }
+    // Waypoint dots along the track
+    track.forEach(function(pt, i) {
+        var isLandfall = (i === track.length - 1);
+        var dotColor   = isLandfall ? '#ef4444'
+                       : i === 0   ? '#22c55e'
+                       : '#38bdf8';
 
-    function updateMap(index) {
-        var currentDate = dates[index];
-        dateDisplay.innerText = currentDate;
-
-        // A. Update Polygons
-        geoLayer.eachLayer(function(layer) {
-            var dName = layer.feature.properties.NAME_2;
-            var dData = simData[dName];
-            
-            if (dData && dData[index]) {
-                var stats = dData[index];
-                var className = stats.risk === "HIGH" ? "pulse-red" : "";
-                
-                layer.setStyle({ 
-                    fillColor: stats.color,
-                    className: className
-                });
-                
-                // Matches V10 Engine Keys (Capitalized)
-                // Update Popup with ROBUST DATA CHECKING
-                layer.bindPopup(
-                    `<b>${dName}</b><br>` +
-                    `Risk: <b style="color:${stats.color}">${stats.risk}</b><br>` +
-                    // FIX: Use 'Accumulation', not 'accum'
-                    `Flood Depth: <b>${stats.Accumulation || stats.depth || 0} mm</b><br>` + 
-                    `<hr style="margin:5px 0; border:0; border-top:1px solid #334155">` +
-                    // FIX: Check for both Capitalized and Lowercase keys
-                    `Daily Rain: ${stats.Daily_Rain || stats.daily_rain || stats.rain || 0} mm<br>` +
-                    `Total Rain: <b style="color:#38bdf8">${stats.Total_Rain || stats.total_rain || 0} mm</b><br>` +
-                    `<span style="font-size:9px; color:#64748b">` +
-                    `Dist: ${stats.Debug_Dist || stats.debug_dist || '?'}km | W: ${stats.Debug_W || stats.debug_w || '?'}` +
-                    `</span>`
-                );
-            }
+        var dotIcon = L.divIcon({
+            className: '',
+            html: '<div class="track-dot' + (isLandfall ? ' landfall' : '') + '" style="background:' + dotColor + '"></div>',
+            iconSize:   [14, 14],
+            iconAnchor: [7, 7]
         });
 
-        // B. Update Heatmap
-        if (heatLayer) heatmapLayerGroup.removeLayer(heatLayer);
-        if (heatData && heatData[index]) {
-            heatLayer = L.heatLayer(heatData[index], {
-                radius: 40, blur: 25, maxZoom: 8, max: 1.0,
-                gradient: {0.4: 'yellow', 0.65: 'orange', 1: 'red'}
-            }).addTo(heatmapLayerGroup);
-        }
-    }
+        var label = i === 0          ? 'Origin'
+                  : isLandfall       ? '⚡ Landfall'
+                  : 'Track point ' + i;
 
-    slider.addEventListener('input', function() { updateMap(this.value); });
-
-    var isPlaying = false; var playInterval;
-    function togglePlay() {
-        if (isPlaying) {
-            clearInterval(playInterval);
-            document.getElementById('playBtn').innerHTML = '<i class="fa-solid fa-play"></i>';
-        } else {
-            playInterval = setInterval(function() {
-                var val = parseInt(slider.value);
-                if (val < dates.length - 1) { slider.value = val + 1; updateMap(val + 1); }
-                else { slider.value = 0; updateMap(0); }
-            }, 800);
-            document.getElementById('playBtn').innerHTML = '<i class="fa-solid fa-pause"></i>';
-        }
-        isPlaying = !isPlaying;
-    }
-
-    // --- CHART ---
-    {% if result %}
-    const ctx = document.getElementById('miniChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: {{ result.chart_labels | tojson }},
-            datasets: [{
-                label: 'Rain', data: {{ result.chart_rain | tojson }},
-                backgroundColor: '#38bdf8', order:2
-            }, {
-                label: 'Flood', data: {{ result.chart_water | tojson }},
-                type: 'line', borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.2)', fill:true, order:1
-            }]
-        },
-        options: { responsive: true, maintainAspectRatio: false, scales: {x:{display:false},y:{display:false}}, plugins:{legend:{display:false}} }
+        L.marker(pt, {icon: dotIcon})
+         .bindTooltip(label, {direction:'top', offset:[0,-8]})
+         .addTo(trackLayerGroup);
     });
-    {% endif %}
+
+    // Place the spinning cyclone icon at position 0 initially
+    placeCycloneIcon(track[0], 0, track.length);
+}
+
+function placeCycloneIcon(latlon, dayIdx, totalDays) {
+    if (cycloneMarker) trackLayerGroup.removeLayer(cycloneMarker);
+
+    var pct    = totalDays > 1 ? Math.round((dayIdx / (totalDays - 1)) * 100) : 0;
+    var isNear = dayIdx >= totalDays - 2;  // near landfall — turn red
+
+    var icon = L.divIcon({
+        className: '',
+        html: '<div class="cyclone-icon" style="color:' + (isNear ? '#ef4444' : '#22d3ee') + '">🌀</div>',
+        iconSize:   [36, 36],
+        iconAnchor: [18, 18]
+    });
+
+    cycloneMarker = L.marker(latlon, {icon: icon, zIndexOffset: 1000})
+        .bindTooltip(
+            '<b>Cyclone Position</b><br>Day ' + (dayIdx + 1) + ' of ' + totalDays +
+            '<br>Track progress: ' + pct + '%' +
+            (isNear ? '<br><span style="color:#ef4444">⚡ Approaching landfall</span>' : ''),
+            {direction: 'top', offset: [0, -20]}
+        )
+        .addTo(trackLayerGroup);
+}
+
+// Interpolate cyclone position along track for a given date index
+function updateCyclonePosition(dateIdx) {
+    if (!trackPath || trackPath.length === 0) return;
+
+    var totalDates = dates.length;
+    var totalPts   = trackPath.length;
+    if (totalDates === 0 || totalPts === 0) return;
+
+    // Map date index → track index (linear interpolation)
+    var trackIdx = Math.min(
+        Math.round((dateIdx / Math.max(totalDates - 1, 1)) * (totalPts - 1)),
+        totalPts - 1
+    );
+
+    placeCycloneIcon(trackPath[trackIdx], trackIdx, totalPts);
+}
+
+// Historical mode uses trackPath; live/forecast uses liveTrackPath if cyclone active
+var activeTrack = (trackPath && trackPath.length > 0) ? trackPath
+                : (typeof liveTrackPath !== 'undefined' && liveTrackPath.length > 0) ? liveTrackPath
+                : [];
+buildCycloneTrack(activeTrack);
+
+// ── 5. Map update function ────────────────────────────────────────────────────
+var heatLayer = null;
+var currentDayIdx = 0; // for forecast day switching
+
+function updateMap(index) {
+    var currentDate = dates[index] || "—";
+    var el = document.getElementById('dateDisplay');
+    if (el) el.innerText = currentDate;
+
+    geoLayer.eachLayer(function(layer) {
+        var dName = layer.feature.properties.NAME_2;
+        var dData = simData[dName];
+        if (!dData) return;
+
+        var stats;
+        if (activeMode === 'forecast') {
+            // For forecast: each district has array of day objects
+            stats = dData[currentDayIdx] || dData[0];
+        } else {
+            stats = dData[index] || dData[0];
+        }
+        if (!stats) return;
+
+        var color = stats.Color || stats.color || "#10b981";
+        var risk  = stats.Risk  || stats.risk  || "NO FLOOD";
+        var accum = stats.Accumulation || stats.depth || 0;
+        var daily = stats.Daily_Rain   || stats.daily_rain || stats.rain || 0;
+        var total = stats.Total_Rain   || stats.total_rain || 0;
+        var dDist = stats.Debug_Dist   || stats.debug_dist || "—";
+        var dW    = stats.Debug_W      || stats.debug_w    || "—";
+
+        layer.setStyle({fillColor: color, fillOpacity: 0.7});
+
+        var confidenceLine = "";
+        if (activeMode === 'forecast' && stats.confidence) {
+            var c = stats.confidence;
+            confidenceLine = `<br><span style="color:${c.color}; font-size:10px">Confidence: ${c.label} (±${c.uncertainty_pct || '?'}%)</span>`;
+        }
+        var sourceLine = (activeMode !== 'historical')
+            ? `<br><span style="font-size:9px;color:#38bdf8">Live: Open-Meteo API</span>`
+            : `<br><span style="font-size:9px;color:#64748b">Source: CHIRPS v2.0</span>`;
+
+        layer.bindPopup(
+            `<b>${dName}</b><br>`
+            + `Risk: <b style="color:${color}">${risk}</b><br>`
+            + `Flood Depth: <b>${accum} mm</b><br>`
+            + `<hr style="margin:5px 0;border:0;border-top:1px solid #334155">`
+            + `Daily Rain: ${daily} mm<br>`
+            + `Total Rain: <b style="color:#38bdf8">${total} mm</b>`
+            + confidenceLine
+            + sourceLine
+            + `<br><span style="font-size:9px;color:#64748b">Dist: ${dDist}km | W: ${dW}</span>`
+        );
+    });
+
+    // Heatmap (historical only)
+    if (heatLayer) heatmapLayerGroup.removeLayer(heatLayer);
+    if (heatData && heatData[index] && heatData[index].length > 0) {
+        heatLayer = L.heatLayer(heatData[index], {
+            radius:35, blur:20, maxZoom:8, max:1.0,
+            gradient:{0.4:'yellow', 0.65:'orange', 1:'red'}
+        }).addTo(heatmapLayerGroup);
+    }
+}
+
+// ── 6. Slider ─────────────────────────────────────────────────────────────────
+var slider = document.getElementById('timeSlider');
+if (slider && dates.length > 0) {
+    slider.max = dates.length - 1;
+    slider.disabled = false;
+    slider.value = 0;
+}
+updateMap(0);
+
+if (slider) {
+    slider.addEventListener('input', function() {
+        var idx = parseInt(this.value);
+        updateMap(idx);
+        updateSidebarForDistrict(selectedDistrict);
+        updateCyclonePosition(idx);
+    });
+}
+
+var isPlaying = false; var playInterval;
+function togglePlay() {
+    if (isPlaying) {
+        clearInterval(playInterval);
+        document.getElementById('playBtn').innerHTML = '<i class="fa-solid fa-play"></i>';
+    } else {
+        playInterval = setInterval(function() {
+            var val = parseInt(slider.value);
+            if (val < dates.length - 1) { slider.value = val + 1; updateMap(val + 1); }
+            else { slider.value = 0; updateMap(0); }
+            updateSidebarForDistrict(selectedDistrict);
+            updateCyclonePosition(parseInt(slider.value));
+        }, 800);
+        document.getElementById('playBtn').innerHTML = '<i class="fa-solid fa-pause"></i>';
+    }
+    isPlaying = !isPlaying;
+}
+
+// ── 7. Forecast day tabs ──────────────────────────────────────────────────────
+function switchForecastDay(dayIdx, btn) {
+    currentDayIdx = dayIdx;
+    document.querySelectorAll('.day-tab').forEach(function(t) { t.classList.remove('active'); });
+    if (btn) btn.classList.add('active');
+    updateMap(0);
+    updateSidebarForDistrict(selectedDistrict);
+}
+
+// ── 8. Chart instance (managed globally so we can destroy/recreate) ───────────
+var miniChartInstance = null;
+
+function renderChart(labels, rainData, waterData, rainLow, rainHigh) {
+    var ctx = document.getElementById('miniChart');
+    if (!ctx) return;
+    if (miniChartInstance) { miniChartInstance.destroy(); miniChartInstance = null; }
+
+    var datasets = [
+        {
+            label: 'Rain',
+            data: rainData,
+            backgroundColor: 'rgba(56,189,248,0.6)',
+            type: 'bar', order: 2
+        },
+        {
+            label: 'Flood Depth',
+            data: waterData,
+            type: 'line', borderColor: '#ef4444',
+            backgroundColor: 'rgba(239,68,68,0.15)', fill: true,
+            tension: 0.3, pointRadius: 3, order: 1
+        }
+    ];
+
+    // Uncertainty band if present (forecast mode)
+    if (rainHigh && rainHigh.length) {
+        datasets.push({
+            label: 'Rain high', data: rainHigh,
+            type: 'line', borderColor: 'rgba(56,189,248,0.25)',
+            borderDash: [4,4], fill: false, pointRadius: 0, order: 3
+        });
+    }
+    if (rainLow && rainLow.length) {
+        datasets.push({
+            label: 'Rain low', data: rainLow,
+            type: 'line', borderColor: 'rgba(56,189,248,0.25)',
+            borderDash: [4,4], fill: false, pointRadius: 0, order: 3
+        });
+    }
+
+    miniChartInstance = new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: { x: { display: false }, y: { display: false } },
+            plugins: { legend: { display: false } },
+            animation: { duration: 300 }
+        }
+    });
+}
+
+// ── 9. Sidebar update — runs on every district click ─────────────────────────
+function updateSidebarForDistrict(dName) {
+    var dData = simData[dName];
+    if (!dData || dData.length === 0) return;
+
+    // Label
+    var labelEl = document.getElementById('districtLabel');
+    if (labelEl) {
+        var prefix = activeMode === 'live' ? '<span class="live-dot"></span>LIVE — '
+                   : activeMode === 'forecast' ? '<span class="forecast-dot"></span>FORECAST — '
+                   : '';
+        labelEl.innerHTML = prefix + dName.toUpperCase();
+    }
+
+    if (activeMode === 'forecast') {
+        // ── Forecast: show all 3 days ─────────────────────────────────────
+        var labels   = [], rainMid = [], rainLow = [], rainHigh = [], depthMid = [];
+        var peakRisk = "NO FLOOD", peakDepth = 0, totalRain = 0, maxWind = 0;
+        var riskOrder = {"HIGH":0,"MODERATE":1,"LOW":2,"NO FLOOD":3};
+
+        dData.forEach(function(day) {
+            var date  = day.date || day.Date || "";
+            var rain  = day.rain_mm   || day.Daily_Rain || 0;
+            var depth = day.flood_depth_mm || day.Accumulation || 0;
+            var wind  = day.wind_kmh  || 0;
+            var risk  = day.risk || day.Risk || "NO FLOOD";
+            var unc   = day.uncertainty || {};
+
+            labels.push(date.slice(5));   // MM-DD
+            rainMid.push(rain);
+            rainLow.push(unc.low  || rain);
+            rainHigh.push(unc.high || rain);
+            depthMid.push(depth);
+
+            totalRain += rain;
+            if (depth > peakDepth) peakDepth = depth;
+            if (wind  > maxWind)   maxWind   = wind;
+            if ((riskOrder[risk] || 3) < (riskOrder[peakRisk] || 3)) peakRisk = risk;
+        });
+
+        var riskColors = {"HIGH":"#ef4444","MODERATE":"#f97316","LOW":"#facc15","NO FLOOD":"#10b981"};
+        _updateKPIs(peakRisk, riskColors[peakRisk] || "#10b981", totalRain.toFixed(1), peakDepth.toFixed(1), maxWind.toFixed(1));
+
+        // Confidence strip
+        var confStrip = document.getElementById('confStrip');
+        if (confStrip) {
+            var confColors = {"HIGH":"#22c55e","MEDIUM":"#f59e0b","LOW":"#ef4444"};
+            confStrip.innerHTML = dData.map(function(day, i) {
+                var c = day.confidence || {};
+                var cl = c.label || "?";
+                var cc = confColors[cl] || "#64748b";
+                return '<div class="conf-badge" style="background:'+cc+'20;color:'+cc+';border:1px solid '+cc+'40">D'+(i+1)+' '+cl+'</div>';
+            }).join('');
+        }
+
+        renderChart(labels, rainMid, depthMid, rainLow, rainHigh);
+
+    } else if (activeMode === 'live') {
+        // ── Live: single frame ────────────────────────────────────────────
+        var frame = dData[0] || {};
+        var rain  = frame.rain_today_mm || frame.Daily_Rain || 0;
+        var depth = frame.flood_depth_mm || frame.Accumulation || 0;
+        var wind  = frame.wind_kmh || 0;
+        var risk  = frame.risk || frame.Risk || "NO FLOOD";
+        var riskColors2 = {"HIGH":"#ef4444","MODERATE":"#f97316","LOW":"#facc15","NO FLOOD":"#10b981"};
+
+        _updateKPIs(risk, riskColors2[risk] || "#10b981", rain, depth, wind);
+        renderChart([dates[0] || "Today"], [rain], [depth], [], []);
+
+    } else {
+        // ── Historical: show full timeline for this district ──────────────
+        var sliderIdx = slider ? parseInt(slider.value) : 0;
+        var labels2 = [], rainArr = [], depthArr = [];
+
+        dData.forEach(function(frame, i) {
+            var d = frame.Date || dates[i] || ("Day " + (i+1));
+            labels2.push(typeof d === 'string' ? d.slice(5) : d);
+            rainArr.push(frame.Daily_Rain || frame.daily_rain || 0);
+            depthArr.push(frame.Accumulation || frame.depth || 0);
+        });
+
+        var curFrame = dData[sliderIdx] || dData[dData.length - 1] || {};
+        var risk3    = curFrame.Risk  || curFrame.risk  || "NO FLOOD";
+        var color3   = curFrame.Color || curFrame.color || "#10b981";
+        var rain3    = curFrame.Daily_Rain   || curFrame.daily_rain   || 0;
+        var depth3   = curFrame.Accumulation || curFrame.depth        || 0;
+        var total3   = curFrame.Total_Rain   || curFrame.total_rain   || 0;
+
+        _updateKPIs(risk3, color3, total3, depth3, "—");
+        renderChart(labels2, rainArr, depthArr, [], []);
+    }
+}
+
+function _updateKPIs(risk, color, rain, depth, wind) {
+    var riskEl  = document.getElementById('riskVal');
+    var depthEl = document.getElementById('depthVal');
+    var rainEl  = document.getElementById('rainVal');
+    var windEl  = document.getElementById('windVal');
+
+    if (riskEl)  { riskEl.innerText = risk;         riskEl.style.color = color; riskEl.className = ''; }
+    if (depthEl) { depthEl.innerText = depth + ' mm'; }
+    if (rainEl)  { rainEl.innerText  = rain + ' mm'; }
+    if (windEl)  { windEl.innerText  = (wind !== "—" ? wind + ' km/h' : "—"); }
+}
+
+// ── Initial render ────────────────────────────────────────────────────────────
+{% if result %}
+(function() {
+    // Render default Chennai chart from server-side data on first load
+    renderChart(
+        {{ result.chart_labels | tojson }},
+        {{ result.chart_rain   | tojson }},
+        {{ result.chart_water  | tojson }},
+        {% if result.chart_rain_low  is defined %}{{ result.chart_rain_low  | tojson }}{% else %}[]{% endif %},
+        {% if result.chart_rain_high is defined %}{{ result.chart_rain_high | tojson }}{% else %}[]{% endif %}
+    );
+})();
+{% endif %}
+
+// ── 10. Live auto-refresh (live mode only, every 5 min) ───────────────────────
+{% if active_mode == 'live' %}
+setTimeout(function() { window.location.reload(); }, 5 * 60 * 1000);
+{% endif %}
 </script>
 </body>
 </html>
